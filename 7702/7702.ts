@@ -1,31 +1,28 @@
 import "dotenv/config";
-import {
-  createPublicClient,
-  Hex,
-  http,
-  zeroAddress,
-} from "viem";
+import { createPublicClient, Hex, http, zeroAddress } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
-import { getUserOperationGasPrice } from "@zerodev/sdk/actions"
-import { sepolia } from "viem/chains";
+import { getUserOperationGasPrice } from "@zerodev/sdk/actions";
+import { arbitrum, base } from "viem/chains";
+import { getEntryPoint, KERNEL_V3_3 } from "@zerodev/sdk/constants";
 import {
-  getEntryPoint,
-  KERNEL_V3_3,
-} from "@zerodev/sdk/constants";
-import { create7702KernelAccount, create7702KernelAccountClient } from "@zerodev/ecdsa-validator";
+  create7702KernelAccount,
+  create7702KernelAccountClient,
+} from "@zerodev/ecdsa-validator";
 import { createZeroDevPaymasterClient } from "@zerodev/sdk";
 
 if (!process.env.ZERODEV_RPC) {
   throw new Error("ZERODEV_RPC is not set");
 }
 
-const ZERODEV_RPC = process.env.ZERODEV_RPC;
 const entryPoint = getEntryPoint("0.7");
 const kernelVersion = KERNEL_V3_3;
 
 // We use the Sepolia testnet here, but you can use any network that
 // supports EIP-7702.
-const chain = sepolia;
+const chain = arbitrum;
+const ZERODEV_RPC = process.env.ZERODEV_RPC;
+
+console.log("ZERODEV_RPC", ZERODEV_RPC);
 
 const publicClient = createPublicClient({
   transport: http(),
@@ -33,16 +30,16 @@ const publicClient = createPublicClient({
 });
 
 const main = async () => {
-  const signer = privateKeyToAccount(
-    generatePrivateKey() ?? (process.env.PRIVATE_KEY as Hex)
-  );
+  const signer = privateKeyToAccount(generatePrivateKey());
   console.log("EOA Address:", signer.address);
 
   const account = await create7702KernelAccount(publicClient, {
     signer,
     entryPoint,
-    kernelVersion
-  })
+    kernelVersion,
+  });
+
+  console.log("Account created:", await account.isDeployed());
 
   const paymasterClient = createZeroDevPaymasterClient({
     chain,
@@ -57,10 +54,10 @@ const main = async () => {
     client: publicClient,
     userOperation: {
       estimateFeesPerGas: async ({ bundlerClient }) => {
-        return getUserOperationGasPrice(bundlerClient)
-      }
-    }
-  })
+        return getUserOperationGasPrice(bundlerClient);
+      },
+    },
+  });
 
   const userOpHash = await kernelClient.sendUserOperation({
     callData: await kernelClient.account.encodeCalls([
@@ -76,6 +73,7 @@ const main = async () => {
       },
     ]),
   });
+
   console.log("UserOp sent:", userOpHash);
   console.log("Waiting for UserOp to be completed...");
 
